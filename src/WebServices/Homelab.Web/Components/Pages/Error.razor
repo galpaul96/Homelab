@@ -1,0 +1,38 @@
+@page "/Error"
+@using Microsoft.AspNetCore.Diagnostics
+@inject ILogger<Error> Logger
+
+<PageTitle>Error</PageTitle>
+
+<section class="border rounded p-4 generic-error-panel">
+    <h1 class="h3 mb-2">Something went wrong.</h1>
+    <p class="text-body-secondary mb-0">
+        We could not complete that request. Please try again later.
+    </p>
+</section>
+
+<style>
+    .generic-error-panel {
+        background-color: rgba(23, 33, 45, .58);
+        max-width: 42rem;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var exceptionFeature = HttpContext?.Features.Get<IExceptionHandlerPathFeature>();
+
+        if (exceptionFeature?.Error is not null)
+        {
+            Logger.LogError(
+                exceptionFeature.Error,
+                "Unhandled request error on path {Path}. TraceIdentifier: {TraceIdentifier}",
+                exceptionFeature.Path,
+                HttpContext?.TraceIdentifier);
+        }
+    }
+}

@@ -1,0 +1,25 @@
+﻿@inherits LayoutComponentBase
+@using Homelab.Web.Components.User
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <NotificationHeaderActions />
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    Something went wrong. Please refresh the page or try again later.
+    <a href="" class="reload">Refresh</a>
+    <a class="dismiss">🗙</a>
+</div>
