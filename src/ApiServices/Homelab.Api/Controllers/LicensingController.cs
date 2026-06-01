@@ -122,9 +122,19 @@ public class LicensingController : ControllerBase
         _logger.LogInformation("Deleting client {ClientId}.", id);
 
         var deleted = await _clientService.DeleteClientAsync(id, cancellationToken);
-        if (!deleted)
+        if (deleted.NotFound)
         {
             return NotFound();
+        }
+
+        if (deleted.BlockedByProducts)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Client could not be deleted.",
+                Detail = deleted.Message,
+                Status = StatusCodes.Status409Conflict
+            });
         }
 
         return NoContent();

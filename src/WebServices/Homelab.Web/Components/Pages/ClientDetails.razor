@@ -4,25 +4,29 @@
 @using Homelab.Domain.Web.Licensing
 @using Microsoft.AspNetCore.Authorization
 @inject Homelab.Web.Services.IClientService ClientService
+@inject Homelab.Web.Services.IProductService ProductService
 @inject NavigationManager Navigation
 
 <PageTitle>@(client?.Name ?? "Client details")</PageTitle>
 
-<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-    <div>
-        <a class="btn btn-sm btn-outline-primary mb-3" href="licensing">Back to clients</a>
-        <p class="text-uppercase text-body-secondary small fw-semibold mb-1">Licensing client</p>
-        <h1 class="mb-1">@(client?.Name ?? "Client details")</h1>
-        @if (client is not null)
-        {
-            <div class="text-body-secondary small">External id: @client.ExternalId</div>
-        }
+<div class="client-detail-header">
+    <div class="client-detail-title">
+        <a class="btn btn-sm btn-outline-primary" href="licensing">Back</a>
+        <div>
+            <p class="text-uppercase text-body-secondary small fw-semibold mb-1">Licensing client</p>
+            <h1 class="mb-0">@(client?.Name ?? "Client details")</h1>
+        </div>
     </div>
     @if (client is not null)
     {
-        <button type="button" class="btn btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@isDeleting">
-            Delete client
-        </button>
+        <div class="client-detail-actions">
+            <button type="button" class="btn btn-primary" @onclick="OpenCreateProductModal" disabled="@isDeletingClient">
+                New product
+            </button>
+            <button type="button" class="btn btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@isDeletingClient">
+                Delete client
+            </button>
+        </div>
     }
 </div>
 
@@ -51,93 +55,186 @@ else if (client is null)
 }
 else
 {
-    <div class="row g-4">
-        <div class="col-xl-4">
-            <section class="client-details-panel">
-                <h2 class="h6 text-uppercase text-body-secondary">Record</h2>
-                <dl class="row small mb-0 g-2">
-                    <dt class="col-5 text-body-secondary fw-normal">Name</dt>
-                    <dd class="col-7 mb-0">@client.Name</dd>
-
-                    <dt class="col-5 text-body-secondary fw-normal">Id</dt>
-                    <dd class="col-7 mb-0 client-details-break">@client.Id</dd>
-
-                    <dt class="col-5 text-body-secondary fw-normal">External id</dt>
-                    <dd class="col-7 mb-0 client-details-break">@client.ExternalId</dd>
-
-                    <dt class="col-5 text-body-secondary fw-normal">Created</dt>
-                    <dd class="col-7 mb-0">@FormatDate(client.CreatedDate)</dd>
-
-                    <dt class="col-5 text-body-secondary fw-normal">Updated</dt>
-                    <dd class="col-7 mb-0">@FormatDate(client.UpdatedDate)</dd>
-                </dl>
-            </section>
-
-            @if (isDeleteConfirmationVisible)
-            {
-                <section class="client-details-panel mt-3">
-                    <h2 class="h6 text-uppercase text-body-secondary">Confirm delete</h2>
-                    <p class="small text-body-secondary">
-                        This removes the client from the catalog.
-                    </p>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="HideDeleteConfirmation" disabled="@isDeleting">Cancel</button>
-                        <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteClientAsync" disabled="@isDeleting">
-                            @(isDeleting ? "Deleting..." : "Delete")
-                        </button>
-                    </div>
-                </section>
-            }
+    <section class="client-record-strip" aria-label="Client record">
+        <div>
+            <span class="client-record-label">Id</span>
+            <span class="client-record-value">@client.Id</span>
         </div>
+        <div>
+            <span class="client-record-label">External</span>
+            <span class="client-record-value">@client.ExternalId</span>
+        </div>
+        <div>
+            <span class="client-record-label">Created</span>
+            <span class="client-record-value">@FormatDate(client.CreatedDate)</span>
+        </div>
+        <div>
+            <span class="client-record-label">Updated</span>
+            <span class="client-record-value">@FormatDate(client.UpdatedDate)</span>
+        </div>
+    </section>
 
-        <div class="col-xl-8">
-            <section class="client-details-panel">
-                <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+    <div class="client-detail-grid">
+        <section class="client-details-panel client-edit-panel">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                    <h2 class="h6 text-uppercase text-body-secondary mb-1">Client notes</h2>
+                    <div class="small text-body-secondary">Description and notes are editable.</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="SaveClientAsync" disabled="@IsClientSaveDisabled">
+                    @(isSavingClient ? "Saving..." : "Save")
+                </button>
+            </div>
+
+            <div class="client-edit-fields">
+                <div>
+                    <label class="form-label small text-body-secondary" for="clientDescription">Description</label>
+                    <textarea id="clientDescription" class="form-control form-control-sm" rows="3" @bind="editModel.Description" @bind:event="oninput" disabled="@isSavingClient"></textarea>
+                </div>
+                <div>
+                    <label class="form-label small text-body-secondary" for="clientNotes">Notes</label>
+                    <textarea id="clientNotes" class="form-control form-control-sm" rows="5" @bind="editModel.Notes" @bind:event="oninput" disabled="@isSavingClient"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="client-details-panel client-products-panel">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                    <h2 class="h5 mb-1">Products</h2>
+                    <div class="small text-body-secondary">@products.Count product@(products.Count == 1 ? string.Empty : "s") linked to this client.</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="LoadProductsAsync" disabled="@isLoadingProducts">Refresh</button>
+            </div>
+
+            @if (isLoadingProducts)
+            {
+                <div class="d-flex align-items-center gap-2 text-body-secondary" role="status">
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span>Loading products...</span>
+                </div>
+            }
+            else if (products.Count == 0)
+            {
+                <div class="alert alert-info py-2 mb-0" role="alert">No products have been created for this client yet.</div>
+            }
+            else
+            {
+                <div class="client-product-grid" aria-label="Client products">
+                    @foreach (var product in products.OrderBy(x => x.Name))
+                    {
+                        <button type="button" class="client-product-card" @onclick="() => OpenProduct(product.Id)" @key="product.Id">
+                            <span class="client-product-card-title">@product.Name</span>
+                            <span class="client-product-card-description">@DisplayValue(product.Description, "No description")</span>
+                            <span class="client-product-card-meta">
+                                <span>@DisplayValue(product.Type, "No type")</span>
+                                <span>@DisplayValue(product.HostedOn, "No host")</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    @if (isDeleteConfirmationVisible)
+    {
+        <section class="client-details-panel client-delete-confirm">
+            <div>
+                <h2 class="h6 text-uppercase text-body-secondary mb-1">Confirm client deletion</h2>
+                <p class="small text-body-secondary mb-0">Client deletion is blocked while linked products exist.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="HideDeleteConfirmation" disabled="@isDeletingClient">Cancel</button>
+                <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteClientAsync" disabled="@isDeletingClient">
+                    @(isDeletingClient ? "Deleting..." : "Delete client")
+                </button>
+            </div>
+        </section>
+    }
+}
+
+@if (isCreateProductModalOpen && client is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
                     <div>
-                        <h2 class="h5 mb-1">Details</h2>
-                        <div class="text-body-secondary small">Description and notes are editable.</div>
+                        <div class="text-uppercase text-body-secondary small fw-semibold mb-1">@client.Name</div>
+                        <h2 class="modal-title h4">New product</h2>
                     </div>
-                    <button type="button" class="btn btn-primary" @onclick="SaveClientAsync" disabled="@IsSaveDisabled">
-                        @(isSaving ? "Saving..." : "Save changes")
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseCreateProductModal" disabled="@isSavingProduct"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <label class="form-label" for="productName">Name</label>
+                            <input id="productName" class="form-control" @bind="productDraft.Name" @bind:event="oninput" disabled="@isSavingProduct" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="productType">Type</label>
+                            <input id="productType" class="form-control" @bind="productDraft.Type" @bind:event="oninput" disabled="@isSavingProduct" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="productHostedOn">Hosted on</label>
+                            <input id="productHostedOn" class="form-control" @bind="productDraft.HostedOn" @bind:event="oninput" disabled="@isSavingProduct" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="productDescription">Description</label>
+                            <textarea id="productDescription" class="form-control" rows="4" @bind="productDraft.Description" @bind:event="oninput" disabled="@isSavingProduct"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseCreateProductModal" disabled="@isSavingProduct">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateProductAsync" disabled="@IsCreateProductDisabled">
+                        @(isSavingProduct ? "Creating..." : "Create product")
                     </button>
                 </div>
-
-                <div class="vstack gap-3">
-                    <div>
-                        <label class="form-label" for="clientDescription">Description</label>
-                        <textarea id="clientDescription" class="form-control" rows="5" @bind="editModel.Description" @bind:event="oninput" disabled="@isSaving"></textarea>
-                    </div>
-                    <div>
-                        <label class="form-label" for="clientNotes">Notes</label>
-                        <textarea id="clientNotes" class="form-control" rows="8" @bind="editModel.Notes" @bind:event="oninput" disabled="@isSaving"></textarea>
-                    </div>
-                </div>
-            </section>
+            </div>
         </div>
     </div>
+    <div class="modal-backdrop fade show"></div>
 }
 
 @code {
     [Parameter]
     public Guid ClientId { get; set; }
 
+    private readonly List<WebProductModel> products = [];
     private WebClientModel? client;
     private WebClientEditModel editModel = new();
+    private WebProductDraft productDraft = new();
     private bool isLoading;
-    private bool isSaving;
-    private bool isDeleting;
+    private bool isLoadingProducts;
+    private bool isSavingClient;
+    private bool isSavingProduct;
+    private bool isDeletingClient;
     private bool isDeleteConfirmationVisible;
+    private bool isCreateProductModalOpen;
     private string? errorMessage;
     private string? successMessage;
 
-    private bool IsSaveDisabled =>
-        isSaving ||
-        isDeleting ||
+    private bool IsClientSaveDisabled =>
+        isSavingClient ||
+        isDeletingClient ||
         client is null;
+
+    private bool IsCreateProductDisabled =>
+        isSavingProduct ||
+        client is null ||
+        string.IsNullOrWhiteSpace(productDraft.Name);
 
     protected override async Task OnInitializedAsync()
     {
         await LoadClientAsync();
+        if (client is not null)
+        {
+            await LoadProductsAsync();
+        }
     }
 
     private async Task LoadClientAsync()
@@ -166,6 +263,31 @@ else
         }
     }
 
+    private async Task LoadProductsAsync()
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        isLoadingProducts = true;
+
+        try
+        {
+            var clientProducts = await ProductService.GetProductsAsync(client.Id);
+            products.Clear();
+            products.AddRange(clientProducts);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoadingProducts = false;
+        }
+    }
+
     private async Task SaveClientAsync()
     {
         if (client is null)
@@ -174,7 +296,7 @@ else
         }
 
         ClearMessages();
-        isSaving = true;
+        isSavingClient = true;
 
         try
         {
@@ -200,7 +322,60 @@ else
         }
         finally
         {
-            isSaving = false;
+            isSavingClient = false;
+        }
+    }
+
+    private void OpenCreateProductModal()
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+        productDraft = new WebProductDraft { ClientId = client.Id };
+        isCreateProductModalOpen = true;
+    }
+
+    private void CloseCreateProductModal()
+    {
+        isCreateProductModalOpen = false;
+    }
+
+    private async Task CreateProductAsync()
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+
+        if (string.IsNullOrWhiteSpace(productDraft.Name))
+        {
+            errorMessage = "Product name is required.";
+            return;
+        }
+
+        isSavingProduct = true;
+
+        try
+        {
+            productDraft.ClientId = client.Id;
+            var product = await ProductService.CreateProductAsync(productDraft);
+            UpsertProduct(product);
+            productDraft = new WebProductDraft { ClientId = client.Id };
+            isCreateProductModalOpen = false;
+            successMessage = "Product created.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSavingProduct = false;
         }
     }
 
@@ -223,19 +398,22 @@ else
         }
 
         ClearMessages();
-        isDeleting = true;
+        isDeletingClient = true;
 
         try
         {
-            var deleted = await ClientService.DeleteClientAsync(client.Id);
-            if (!deleted)
+            var result = await ClientService.DeleteClientAsync(client.Id);
+            if (result.Succeeded)
             {
-                errorMessage = "Client was not found.";
-                client = null;
+                Navigation.NavigateTo("licensing");
                 return;
             }
 
-            Navigation.NavigateTo("licensing");
+            errorMessage = result.Message ?? "Client could not be deleted.";
+            if (result.NotFound)
+            {
+                client = null;
+            }
         }
         catch (Exception ex)
         {
@@ -243,8 +421,30 @@ else
         }
         finally
         {
-            isDeleting = false;
+            isDeletingClient = false;
         }
+    }
+
+    private void OpenProduct(Guid productId)
+    {
+        Navigation.NavigateTo($"licensing/products/{productId}");
+    }
+
+    private void UpsertProduct(WebProductModel product)
+    {
+        var index = products.FindIndex(x => x.Id == product.Id);
+        if (index >= 0)
+        {
+            products[index] = product;
+            return;
+        }
+
+        products.Add(product);
+    }
+
+    private static string DisplayValue(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
     private static string FormatDate(DateTime value)

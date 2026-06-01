@@ -93,7 +93,7 @@ namespace Homelab.Web.Services
             return updatedClient is null ? null : MapClient(updatedClient);
         }
 
-        public async Task<bool> DeleteClientAsync(Guid id)
+        public async Task<WebClientDeleteResult> DeleteClientAsync(Guid id)
         {
             logger.LogInformation("Deleting client {ClientId}.", id);
 
@@ -101,12 +101,26 @@ namespace Homelab.Web.Services
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 logger.LogInformation("Client {ClientId} was not found for deletion.", id);
-                return false;
+                return new WebClientDeleteResult
+                {
+                    NotFound = true,
+                    Message = "Client was not found."
+                };
+            }
+
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+                return new WebClientDeleteResult
+                {
+                    Blocked = true,
+                    Message = problem?.Detail ?? "Delete this client's products before deleting the client."
+                };
             }
 
             if (response.IsSuccessStatusCode)
             {
-                return true;
+                return new WebClientDeleteResult { Succeeded = true };
             }
 
             var body = await response.Content.ReadAsStringAsync();
@@ -149,6 +163,11 @@ namespace Homelab.Web.Services
                 CreatedDate = client.CreatedDate,
                 UpdatedDate = client.UpdatedDate
             };
+        }
+
+        private sealed class ProblemResponse
+        {
+            public string? Detail { get; set; }
         }
     }
 }

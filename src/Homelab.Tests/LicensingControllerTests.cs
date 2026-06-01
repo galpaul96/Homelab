@@ -73,13 +73,29 @@ public class LicensingControllerTests
     {
         var service = new FakeClientService
         {
-            DeleteClient = _ => true
+            DeleteClient = _ => ClientDeleteResultDto.Deleted()
         };
         var controller = CreateController(service);
 
         var result = await controller.DeleteClientAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteClientAsyncReturnsConflictWhenProductsExist()
+    {
+        var service = new FakeClientService
+        {
+            DeleteClient = _ => ClientDeleteResultDto.Blocked(2)
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.DeleteClientAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal(409, problem.Status);
     }
 
     private static LicensingController CreateController(FakeClientService service)
@@ -93,7 +109,7 @@ public class LicensingControllerTests
     {
         public Func<CreateClientDto, ClientDetailsDto>? CreateClient { get; init; }
 
-        public Func<Guid, bool>? DeleteClient { get; init; }
+        public Func<Guid, ClientDeleteResultDto>? DeleteClient { get; init; }
 
         public Task<IReadOnlyCollection<ClientDetailsDto>> GetClientsAsync(
             CancellationToken cancellationToken = default)
@@ -127,11 +143,11 @@ public class LicensingControllerTests
             return Task.FromResult<ClientDetailsDto?>(null);
         }
 
-        public Task<bool> DeleteClientAsync(
+        public Task<ClientDeleteResultDto> DeleteClientAsync(
             Guid id,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(DeleteClient?.Invoke(id) ?? false);
+            return Task.FromResult(DeleteClient?.Invoke(id) ?? ClientDeleteResultDto.Missing());
         }
     }
 }

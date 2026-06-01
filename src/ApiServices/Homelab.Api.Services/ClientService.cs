@@ -87,20 +87,28 @@ internal class ClientService : IClientService
         return _mapper.Map<ClientDetailsDto>(client);
     }
 
-    public async Task<bool> DeleteClientAsync(
+    public async Task<ClientDeleteResultDto> DeleteClientAsync(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var exists = await _repository.GetAllAsync<Client>()
-            .AnyAsync(x => x.Id == id, cancellationToken);
+        var client = await _repository.GetAllAsync<Client>()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-        if (!exists)
+        if (client is null)
         {
-            return false;
+            return ClientDeleteResultDto.Missing();
+        }
+
+        var productCount = await _repository.GetAllAsync<Product>()
+            .CountAsync(x => x.ClientId == id, cancellationToken);
+
+        if (productCount > 0)
+        {
+            return ClientDeleteResultDto.Blocked(productCount);
         }
 
         await _repository.DeleteAsync<Client>(id);
-        return true;
+        return ClientDeleteResultDto.Deleted();
     }
 
     private static string? TrimToNull(string? value)

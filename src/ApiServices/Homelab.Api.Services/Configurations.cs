@@ -14,6 +14,7 @@ namespace Homelab.Api.Services
         {
             services.ConfigureRepository(configuration);
             services.TryAddScoped<IClientService, ClientService>();
+            services.TryAddScoped<IProductService, ProductService>();
 
             services.AddAutoMapper(x =>
             {

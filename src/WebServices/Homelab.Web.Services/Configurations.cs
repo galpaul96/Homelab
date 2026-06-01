@@ -11,6 +11,7 @@ namespace Homelab.Web.Services
             services.ConfiugreGateway();
 
             services.TryAddScoped<IClientService, ClientService>();
+            services.TryAddScoped<IProductService, ProductService>();
         }
     }
 }

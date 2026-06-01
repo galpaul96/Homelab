@@ -12,6 +12,6 @@ namespace Homelab.Web.Services
 
         Task<WebClientModel?> UpdateClientAsync(Guid id, WebClientEditModel client);
 
-        Task<bool> DeleteClientAsync(Guid id);
+        Task<WebClientDeleteResult> DeleteClientAsync(Guid id);
     }
 }

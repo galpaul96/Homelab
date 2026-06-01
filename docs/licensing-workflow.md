@@ -1,19 +1,22 @@
-# Licensing Client Workflow
+# Licensing Client And Product Workflow
 
-The Licensing feature now manages Client records only. A Client represents an external entity with a name, description, and notes.
+The Licensing feature manages Client records and Products linked to those Clients. A Client represents an external entity. A Product represents a named product owned by a Client, with optional description, type, and hosting information.
 
 ## Web Flow
 
 - Open `/licensing` as an authenticated Admin user to view the Client catalog.
 - Use **New client** to create a Client with a required name and optional description and notes.
 - Click a Client card to open `/licensing/clients/{id}`.
-- The details page shows the Client id, external id, name, created date, updated date, description, and notes.
-- Only description and notes are editable after creation.
-- Deleting a Client removes it from the catalog using the API soft-delete behavior.
+- The Client details page shows compact Client metadata, editable description and notes, and a Product card grid.
+- Use **New product** on the Client details page to create a Product linked to that Client.
+- Click a Product card to open `/licensing/products/{productId}`.
+- Product details show readonly Client fields and editable Product fields.
+- Product deletion returns to the owning Client details page.
+- Client deletion is blocked while visible Products exist for that Client.
 
 ## API Flow
 
-The web service calls the API through the gateway using these Client endpoints:
+Client endpoints:
 
 - `GET /Licensing/clients`
 - `GET /Licensing/clients/{id}`
@@ -21,4 +24,12 @@ The web service calls the API through the gateway using these Client endpoints:
 - `PUT /Licensing/clients/{id}`
 - `DELETE /Licensing/clients/{id}`
 
-Client names are required but not unique. Existing product, license key, issuance rule, activation, and validation operations have been removed from this feature.
+Product endpoints:
+
+- `GET /Products?clientId={clientId}`
+- `GET /Products/{id}`
+- `POST /Products`
+- `PUT /Products/{id}`
+- `DELETE /Products/{id}`
+
+Client and Product names are required but not unique. Product `Type` and `HostedOn` are free-form strings.

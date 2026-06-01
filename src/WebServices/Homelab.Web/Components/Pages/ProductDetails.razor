@@ -1,0 +1,274 @@
+@page "/licensing/products/{ProductId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Homelab.Domain.Web.Licensing
+@using Microsoft.AspNetCore.Authorization
+@inject Homelab.Web.Services.IProductService ProductService
+@inject NavigationManager Navigation
+
+<PageTitle>@(product?.Name ?? "Product details")</PageTitle>
+
+<div class="product-detail-header">
+    <div class="product-detail-title">
+        <a class="btn btn-sm btn-outline-primary" href="@BackHref">Back</a>
+        <div>
+            <p class="text-uppercase text-body-secondary small fw-semibold mb-1">Licensing product</p>
+            <h1 class="mb-0">@(product?.Name ?? "Product details")</h1>
+        </div>
+    </div>
+    @if (product is not null)
+    {
+        <button type="button" class="btn btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@isDeleting">
+            Delete product
+        </button>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success" role="alert">@successMessage</div>
+}
+
+@if (isLoading)
+{
+    <div class="d-flex align-items-center gap-2 text-body-secondary" role="status">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span>Loading product...</span>
+    </div>
+}
+else if (product is null)
+{
+    <div class="alert alert-info" role="alert">
+        Product was not found.
+    </div>
+}
+else
+{
+    <div class="product-detail-grid">
+        <section class="product-details-panel">
+            <h2 class="h6 text-uppercase text-body-secondary mb-3">Client</h2>
+            <dl class="row small mb-0 g-2">
+                <dt class="col-5 text-body-secondary fw-normal">Name</dt>
+                <dd class="col-7 mb-0">@DisplayValue(product.Client?.Name, "Not set")</dd>
+
+                <dt class="col-5 text-body-secondary fw-normal">Client id</dt>
+                <dd class="col-7 mb-0 product-details-break">@product.ClientId</dd>
+
+                <dt class="col-5 text-body-secondary fw-normal">External id</dt>
+                <dd class="col-7 mb-0 product-details-break">@DisplayValue(product.Client?.ExternalId.ToString(), "Not set")</dd>
+
+                <dt class="col-5 text-body-secondary fw-normal">Description</dt>
+                <dd class="col-7 mb-0">@DisplayValue(product.Client?.Description, "No description")</dd>
+            </dl>
+        </section>
+
+        <section class="product-details-panel">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                    <h2 class="h5 mb-1">Product information</h2>
+                    <div class="small text-body-secondary">Product fields are editable.</div>
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="SaveProductAsync" disabled="@IsSaveDisabled">
+                    @(isSaving ? "Saving..." : "Save changes")
+                </button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-7">
+                    <label class="form-label" for="productName">Name</label>
+                    <input id="productName" class="form-control" @bind="editModel.Name" @bind:event="oninput" disabled="@isSaving" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="productType">Type</label>
+                    <input id="productType" class="form-control" @bind="editModel.Type" @bind:event="oninput" disabled="@isSaving" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="productHostedOn">Hosted on</label>
+                    <input id="productHostedOn" class="form-control" @bind="editModel.HostedOn" @bind:event="oninput" disabled="@isSaving" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="productDescription">Description</label>
+                    <textarea id="productDescription" class="form-control" rows="5" @bind="editModel.Description" @bind:event="oninput" disabled="@isSaving"></textarea>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @if (isDeleteConfirmationVisible)
+    {
+        <section class="product-details-panel product-delete-confirm">
+            <div>
+                <h2 class="h6 text-uppercase text-body-secondary mb-1">Confirm product deletion</h2>
+                <p class="small text-body-secondary mb-0">This removes the product from the client product grid.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="HideDeleteConfirmation" disabled="@isDeleting">Cancel</button>
+                <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteProductAsync" disabled="@isDeleting">
+                    @(isDeleting ? "Deleting..." : "Delete product")
+                </button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid ProductId { get; set; }
+
+    private WebProductModel? product;
+    private WebProductEditModel editModel = new();
+    private bool isLoading;
+    private bool isSaving;
+    private bool isDeleting;
+    private bool isDeleteConfirmationVisible;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private string BackHref => product is null ? "licensing" : $"licensing/clients/{product.ClientId}";
+
+    private bool IsSaveDisabled =>
+        isSaving ||
+        isDeleting ||
+        product is null ||
+        string.IsNullOrWhiteSpace(editModel.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductAsync();
+    }
+
+    private async Task LoadProductAsync()
+    {
+        ClearMessages();
+        isLoading = true;
+
+        try
+        {
+            product = await ProductService.GetProductAsync(ProductId);
+            editModel = product is null
+                ? new WebProductEditModel()
+                : new WebProductEditModel
+                {
+                    Name = product.Name,
+                    Description = product.Description,
+                    Type = product.Type,
+                    HostedOn = product.HostedOn
+                };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveProductAsync()
+    {
+        if (product is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+
+        if (string.IsNullOrWhiteSpace(editModel.Name))
+        {
+            errorMessage = "Product name is required.";
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            var updatedProduct = await ProductService.UpdateProductAsync(product.Id, editModel);
+            if (updatedProduct is null)
+            {
+                errorMessage = "Product was not found.";
+                product = null;
+                return;
+            }
+
+            product = updatedProduct;
+            editModel = new WebProductEditModel
+            {
+                Name = updatedProduct.Name,
+                Description = updatedProduct.Description,
+                Type = updatedProduct.Type,
+                HostedOn = updatedProduct.HostedOn
+            };
+            successMessage = "Product details saved.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        ClearMessages();
+        isDeleteConfirmationVisible = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        isDeleteConfirmationVisible = false;
+    }
+
+    private async Task DeleteProductAsync()
+    {
+        if (product is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+        isDeleting = true;
+        var clientId = product.ClientId;
+
+        try
+        {
+            var deleted = await ProductService.DeleteProductAsync(product.Id);
+            if (!deleted)
+            {
+                errorMessage = "Product was not found.";
+                product = null;
+                return;
+            }
+
+            Navigation.NavigateTo($"licensing/clients/{clientId}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private static string DisplayValue(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+}

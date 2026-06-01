@@ -2,24 +2,25 @@ using Homelab.Domain.Services.Licensing;
 
 namespace Homelab.Api.Services;
 
-public interface IClientService
+public interface IProductService
 {
-    Task<IReadOnlyCollection<ClientDetailsDto>> GetClientsAsync(
+    Task<IReadOnlyCollection<ProductDetailsDto>> GetProductsAsync(
+        Guid? clientId = null,
         CancellationToken cancellationToken = default);
 
-    Task<ClientDetailsDto?> GetClientAsync(
+    Task<ProductDetailsDto?> GetProductAsync(
         Guid id,
         CancellationToken cancellationToken = default);
 
-    Task<ClientDetailsDto> CreateClientAsync(
-        CreateClientDto client,
+    Task<ProductDetailsDto> CreateProductAsync(
+        CreateProductDto product,
         CancellationToken cancellationToken = default);
 
-    Task<ClientDetailsDto?> UpdateClientAsync(
-        UpdateClientDto client,
+    Task<ProductDetailsDto?> UpdateProductAsync(
+        UpdateProductDto product,
         CancellationToken cancellationToken = default);
 
-    Task<ClientDeleteResultDto> DeleteClientAsync(
+    Task<bool> DeleteProductAsync(
         Guid id,
         CancellationToken cancellationToken = default);
 }

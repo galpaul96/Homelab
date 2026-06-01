@@ -8,6 +8,7 @@ namespace Homelab.Api.Ef
     internal class EfContext : DbContext
     {
         public DbSet<Client> Clients => Set<Client>();
+        public DbSet<Product> Products => Set<Product>();
 
         public EfContext(DbContextOptions<EfContext> options)
             : base(options) { }

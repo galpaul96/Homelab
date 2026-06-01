@@ -29,6 +29,8 @@ namespace Homelab.Api.Ef.Migrations
 
             modelBuilder.Entity<Client>(b =>
                 {
+                    b.Ignore("Products");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
