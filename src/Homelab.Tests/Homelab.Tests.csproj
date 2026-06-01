@@ -24,6 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ApiServices\Homelab.Api\Homelab.Api.csproj" />
+    <ProjectReference Include="..\ApiServices\Homelab.Api.Services\Homelab.Api.Services.csproj" />
+    <ProjectReference Include="..\Common\Homelab.Domain\Homelab.Domain.csproj" />
     <ProjectReference Include="..\Homelab.AppHost\Homelab.AppHost.csproj" />
   </ItemGroup>
 

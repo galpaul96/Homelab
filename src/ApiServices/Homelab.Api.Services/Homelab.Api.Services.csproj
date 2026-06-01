@@ -14,7 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Homelab.Domain\Homelab.Domain.csproj" />
     <ProjectReference Include="..\Homelab.Api.Ef\Homelab.Api.Ef.csproj" />
-    <ProjectReference Include="..\Homelab.Api.MongoDb\Homelab.Api.MongoDb.csproj" />
   </ItemGroup>
 
 </Project>

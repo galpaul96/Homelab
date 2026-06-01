@@ -19,7 +19,7 @@ namespace Homelab.Api.Ef
             options =>
                 options.UseNpgsql(
                     connectionString,
-                   x => x.MigrationsAssembly("Homelab.EF"))
+                   x => x.MigrationsAssembly("Homelab.Api.Ef"))
                 );
 
             var sw = Stopwatch.StartNew();

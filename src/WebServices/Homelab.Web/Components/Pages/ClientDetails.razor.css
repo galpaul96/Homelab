@@ -1,0 +1,9 @@
+.client-details-panel {
+    border: 1px solid #2c3a4a;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.client-details-break {
+    overflow-wrap: anywhere;
+}

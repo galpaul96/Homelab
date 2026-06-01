@@ -1,0 +1,99 @@
+.licensing-client-grid {
+    display: grid;
+    gap: .85rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.licensing-client-card {
+    align-items: stretch;
+    background: #17212d;
+    border: 1px solid #2c3a4a;
+    border-radius: 8px;
+    color: #e8edf3;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+    min-height: 12rem;
+    padding: 1rem;
+    text-align: left;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.licensing-client-card:hover,
+.licensing-client-card:focus {
+    border-color: #d9b76f;
+    box-shadow: 0 .75rem 1.5rem rgba(0, 0, 0, .22);
+    outline: none;
+    transform: translateY(-2px);
+}
+
+.licensing-client-initials {
+    align-items: center;
+    background: #263545;
+    border: 1px solid #3a4c60;
+    border-radius: 50%;
+    color: #f3f6f8;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: .82rem;
+    font-weight: 700;
+    height: 2.5rem;
+    justify-content: center;
+    width: 2.5rem;
+}
+
+.licensing-client-card-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: .5rem;
+    min-width: 0;
+}
+
+.licensing-client-card-title {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.licensing-client-card-description {
+    color: #cbd8e5;
+    display: -webkit-box;
+    font-size: .86rem;
+    line-height: 1.35;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.licensing-client-card-meta {
+    color: #9fb0c3;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: .78rem;
+    gap: .55rem;
+    margin-top: auto;
+}
+
+@media (max-width: 1400px) {
+    .licensing-client-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .licensing-client-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 540px) {
+    .licensing-client-grid {
+        grid-template-columns: 1fr;
+    }
+}

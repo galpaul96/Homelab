@@ -2,11 +2,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var cache = builder.AddRedis("cache");
 
-var db = builder.AddMongoDB("mongodb").AddDatabase("mydb");
-
 var apiService = builder.AddProject<Projects.Homelab_Api>("api")
-    .WithHttpHealthCheck("/health")
-    .WithReference(db);
+    .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.Homelab_Web>("webfrontend")
     .WithExternalHttpEndpoints()

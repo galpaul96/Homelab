@@ -10,7 +10,7 @@ namespace Homelab.Web.Services
         {
             services.ConfiugreGateway();
 
-            services.TryAddScoped<IModulesService, ModulesService>();
+            services.TryAddScoped<IClientService, ClientService>();
         }
     }
 }

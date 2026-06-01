@@ -1,0 +1,260 @@
+@page "/licensing/clients/{ClientId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Homelab.Domain.Web.Licensing
+@using Microsoft.AspNetCore.Authorization
+@inject Homelab.Web.Services.IClientService ClientService
+@inject NavigationManager Navigation
+
+<PageTitle>@(client?.Name ?? "Client details")</PageTitle>
+
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+        <a class="btn btn-sm btn-outline-primary mb-3" href="licensing">Back to clients</a>
+        <p class="text-uppercase text-body-secondary small fw-semibold mb-1">Licensing client</p>
+        <h1 class="mb-1">@(client?.Name ?? "Client details")</h1>
+        @if (client is not null)
+        {
+            <div class="text-body-secondary small">External id: @client.ExternalId</div>
+        }
+    </div>
+    @if (client is not null)
+    {
+        <button type="button" class="btn btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@isDeleting">
+            Delete client
+        </button>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success" role="alert">@successMessage</div>
+}
+
+@if (isLoading)
+{
+    <div class="d-flex align-items-center gap-2 text-body-secondary" role="status">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span>Loading client...</span>
+    </div>
+}
+else if (client is null)
+{
+    <div class="alert alert-info" role="alert">
+        Client was not found.
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-xl-4">
+            <section class="client-details-panel">
+                <h2 class="h6 text-uppercase text-body-secondary">Record</h2>
+                <dl class="row small mb-0 g-2">
+                    <dt class="col-5 text-body-secondary fw-normal">Name</dt>
+                    <dd class="col-7 mb-0">@client.Name</dd>
+
+                    <dt class="col-5 text-body-secondary fw-normal">Id</dt>
+                    <dd class="col-7 mb-0 client-details-break">@client.Id</dd>
+
+                    <dt class="col-5 text-body-secondary fw-normal">External id</dt>
+                    <dd class="col-7 mb-0 client-details-break">@client.ExternalId</dd>
+
+                    <dt class="col-5 text-body-secondary fw-normal">Created</dt>
+                    <dd class="col-7 mb-0">@FormatDate(client.CreatedDate)</dd>
+
+                    <dt class="col-5 text-body-secondary fw-normal">Updated</dt>
+                    <dd class="col-7 mb-0">@FormatDate(client.UpdatedDate)</dd>
+                </dl>
+            </section>
+
+            @if (isDeleteConfirmationVisible)
+            {
+                <section class="client-details-panel mt-3">
+                    <h2 class="h6 text-uppercase text-body-secondary">Confirm delete</h2>
+                    <p class="small text-body-secondary">
+                        This removes the client from the catalog.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="HideDeleteConfirmation" disabled="@isDeleting">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteClientAsync" disabled="@isDeleting">
+                            @(isDeleting ? "Deleting..." : "Delete")
+                        </button>
+                    </div>
+                </section>
+            }
+        </div>
+
+        <div class="col-xl-8">
+            <section class="client-details-panel">
+                <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Details</h2>
+                        <div class="text-body-secondary small">Description and notes are editable.</div>
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="SaveClientAsync" disabled="@IsSaveDisabled">
+                        @(isSaving ? "Saving..." : "Save changes")
+                    </button>
+                </div>
+
+                <div class="vstack gap-3">
+                    <div>
+                        <label class="form-label" for="clientDescription">Description</label>
+                        <textarea id="clientDescription" class="form-control" rows="5" @bind="editModel.Description" @bind:event="oninput" disabled="@isSaving"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label" for="clientNotes">Notes</label>
+                        <textarea id="clientNotes" class="form-control" rows="8" @bind="editModel.Notes" @bind:event="oninput" disabled="@isSaving"></textarea>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid ClientId { get; set; }
+
+    private WebClientModel? client;
+    private WebClientEditModel editModel = new();
+    private bool isLoading;
+    private bool isSaving;
+    private bool isDeleting;
+    private bool isDeleteConfirmationVisible;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool IsSaveDisabled =>
+        isSaving ||
+        isDeleting ||
+        client is null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClientAsync();
+    }
+
+    private async Task LoadClientAsync()
+    {
+        ClearMessages();
+        isLoading = true;
+
+        try
+        {
+            client = await ClientService.GetClientAsync(ClientId);
+            editModel = client is null
+                ? new WebClientEditModel()
+                : new WebClientEditModel
+                {
+                    Description = client.Description,
+                    Notes = client.Notes
+                };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveClientAsync()
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+        isSaving = true;
+
+        try
+        {
+            var updatedClient = await ClientService.UpdateClientAsync(client.Id, editModel);
+            if (updatedClient is null)
+            {
+                errorMessage = "Client was not found.";
+                client = null;
+                return;
+            }
+
+            client = updatedClient;
+            editModel = new WebClientEditModel
+            {
+                Description = updatedClient.Description,
+                Notes = updatedClient.Notes
+            };
+            successMessage = "Client details saved.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        ClearMessages();
+        isDeleteConfirmationVisible = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        isDeleteConfirmationVisible = false;
+    }
+
+    private async Task DeleteClientAsync()
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        ClearMessages();
+        isDeleting = true;
+
+        try
+        {
+            var deleted = await ClientService.DeleteClientAsync(client.Id);
+            if (!deleted)
+            {
+                errorMessage = "Client was not found.";
+                client = null;
+                return;
+            }
+
+            Navigation.NavigateTo("licensing");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private static string FormatDate(DateTime value)
+    {
+        return value == default ? "Not set" : value.ToString("MMM d, yyyy h:mm tt");
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+}

@@ -1,6 +1,5 @@
 using AutoMapper;
 using Homelab.Api.Ef;
-using Homelab.Api.MongoDb;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,9 +13,7 @@ namespace Homelab.Api.Services
             IConfiguration configuration)
         {
             services.ConfigureRepository(configuration);
-            services.ConfigureMongoDb(configuration);
-            services.TryAddScoped<IMeetingService, MeetingService>();
-            services.TryAddScoped<IStudentService, StudentService>();
+            services.TryAddScoped<IClientService, ClientService>();
 
             services.AddAutoMapper(x =>
             {

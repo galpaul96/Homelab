@@ -29,8 +29,7 @@ internal class GatewayClient : IGatewayClient
         using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
 
         var uri = BuildUri(baseUrl, route);
-        var content = new StringContent(JsonSerializer.Serialize(payload, JsonSerializerOptions), Encoding.UTF8, "application/json");
-        return await httpClient.PostAsync(uri, content);
+        return await httpClient.PostAsync(uri, CreateJsonContent(payload));
     }
 
     public Task<HttpResponseMessage> PatchAsync(string baseUrl, string route, object? payload = null)
@@ -38,14 +37,30 @@ internal class GatewayClient : IGatewayClient
         throw new NotImplementedException("PatchAsync is not implemented yet.");
     }
 
-    public Task<HttpResponseMessage> PutAsync(string baseUrl, string route, object? payload = null)
+    public async Task<HttpResponseMessage> PutAsync(string baseUrl, string route, object? payload = null)
     {
-        throw new NotImplementedException("PutAsync is not implemented yet.");
+        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
+
+        var uri = BuildUri(baseUrl, route);
+        return await httpClient.PutAsync(uri, CreateJsonContent(payload));
     }
 
-    public Task<HttpResponseMessage> DeleteAsync(string baseUrl, string route, object? payload = null)
+    public async Task<HttpResponseMessage> DeleteAsync(string baseUrl, string route, object? payload = null)
     {
-        throw new NotImplementedException("DeleteAsync is not implemented yet.");
+        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
+
+        var uri = BuildUri(baseUrl, route);
+        if (payload is null)
+        {
+            return await httpClient.DeleteAsync(uri);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, uri)
+        {
+            Content = CreateJsonContent(payload)
+        };
+
+        return await httpClient.SendAsync(request);
     }
 
     private static Uri BuildUri(string baseUrl, string route)
@@ -57,5 +72,10 @@ internal class GatewayClient : IGatewayClient
         var normalizedRoute = route.StartsWith('/') ? route[1..] : route;
 
         return new Uri(new Uri(normalizedBaseUrl), normalizedRoute);
+    }
+
+    private static StringContent CreateJsonContent(object? payload)
+    {
+        return new StringContent(JsonSerializer.Serialize(payload, JsonSerializerOptions), Encoding.UTF8, "application/json");
     }
 }

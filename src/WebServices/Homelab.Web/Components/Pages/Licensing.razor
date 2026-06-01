@@ -1,0 +1,235 @@
+@page "/licensing"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Homelab.Domain.Web.Licensing
+@using Microsoft.AspNetCore.Authorization
+@inject Homelab.Web.Services.IClientService ClientService
+@inject NavigationManager Navigation
+
+<PageTitle>Licensing clients</PageTitle>
+
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+        <p class="text-uppercase text-body-secondary small fw-semibold mb-1">Licensing</p>
+        <h1 class="mb-1">Clients</h1>
+        <div class="text-body-secondary">External entities tracked for licensing administration.</div>
+    </div>
+    <button type="button" class="btn btn-primary" @onclick="OpenCreateClientModal">
+        New client
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success" role="alert">@successMessage</div>
+}
+
+@if (isLoadingClients)
+{
+    <div class="d-flex align-items-center gap-2 text-body-secondary" role="status">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span>Loading clients...</span>
+    </div>
+}
+else if (clients.Count == 0)
+{
+    <div class="alert alert-info" role="alert">
+        No clients have been created yet.
+    </div>
+}
+else
+{
+    <div class="licensing-client-grid" aria-label="Client catalog">
+        @foreach (var client in clients.OrderBy(x => x.Name))
+        {
+            <button type="button" class="licensing-client-card" @onclick="() => OpenClient(client.Id)" @key="client.Id">
+                <span class="licensing-client-initials" aria-hidden="true">@GetInitials(client.Name)</span>
+                <span class="licensing-client-card-body">
+                    <span class="licensing-client-card-title">@client.Name</span>
+                    <span class="licensing-client-card-description">@DisplayValue(client.Description)</span>
+                    <span class="licensing-client-card-meta">
+                        <span>Created @FormatDate(client.CreatedDate)</span>
+                        <span>@(string.IsNullOrWhiteSpace(client.Notes) ? "No notes" : "Notes captured")</span>
+                    </span>
+                </span>
+            </button>
+        }
+    </div>
+}
+
+@if (isCreateClientModalOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <div class="text-uppercase text-body-secondary small fw-semibold mb-1">Client record</div>
+                        <h2 class="modal-title h4">New client</h2>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseCreateClientModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="vstack gap-3">
+                        <div>
+                            <label class="form-label" for="clientName">Name</label>
+                            <input id="clientName" class="form-control" @bind="clientDraft.Name" @bind:event="oninput" disabled="@isSavingClient" />
+                        </div>
+                        <div>
+                            <label class="form-label" for="clientDescription">Description</label>
+                            <textarea id="clientDescription" class="form-control" rows="3" @bind="clientDraft.Description" @bind:event="oninput" disabled="@isSavingClient"></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label" for="clientNotes">Notes</label>
+                            <textarea id="clientNotes" class="form-control" rows="5" @bind="clientDraft.Notes" @bind:event="oninput" disabled="@isSavingClient"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseCreateClientModal" disabled="@isSavingClient">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="CreateClientAsync" disabled="@IsCreateClientDisabled">
+                        @(isSavingClient ? "Creating..." : "Create client")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private readonly List<WebClientModel> clients = [];
+    private WebClientDraft clientDraft = new();
+    private bool isCreateClientModalOpen;
+    private bool isLoadingClients;
+    private bool isSavingClient;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool IsCreateClientDisabled =>
+        isSavingClient ||
+        string.IsNullOrWhiteSpace(clientDraft.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClientsAsync();
+    }
+
+    private async Task LoadClientsAsync()
+    {
+        ClearMessages();
+        isLoadingClients = true;
+
+        try
+        {
+            var clientResponses = await ClientService.GetClientsAsync();
+            clients.Clear();
+            clients.AddRange(clientResponses);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoadingClients = false;
+        }
+    }
+
+    private void OpenCreateClientModal()
+    {
+        ClearMessages();
+        clientDraft = new WebClientDraft();
+        isCreateClientModalOpen = true;
+    }
+
+    private void CloseCreateClientModal()
+    {
+        isCreateClientModalOpen = false;
+    }
+
+    private async Task CreateClientAsync()
+    {
+        ClearMessages();
+
+        if (string.IsNullOrWhiteSpace(clientDraft.Name))
+        {
+            errorMessage = "Client name is required.";
+            return;
+        }
+
+        isSavingClient = true;
+
+        try
+        {
+            var client = await ClientService.CreateClientAsync(clientDraft);
+            UpsertClient(client);
+            clientDraft = new WebClientDraft();
+            isCreateClientModalOpen = false;
+            successMessage = "Client created.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSavingClient = false;
+        }
+    }
+
+    private void OpenClient(Guid clientId)
+    {
+        Navigation.NavigateTo($"licensing/clients/{clientId}");
+    }
+
+    private void UpsertClient(WebClientModel client)
+    {
+        var index = clients.FindIndex(x => x.Id == client.Id);
+        if (index >= 0)
+        {
+            clients[index] = client;
+            return;
+        }
+
+        clients.Add(client);
+    }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name
+            .Split([' ', '.', '-', '_'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .ToArray();
+
+        if (parts.Length == 0)
+        {
+            return "C";
+        }
+
+        return string.Concat(parts.Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string DisplayValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "No description" : value;
+    }
+
+    private static string FormatDate(DateTime value)
+    {
+        return value == default ? "unknown" : value.ToString("MMM d, yyyy");
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+}

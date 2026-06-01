@@ -17,7 +17,7 @@
         "applicationUrl": "https://localhost:7020;http://localhost:5078",
         "environmentVariables": {
           "ASPNETCORE_ENVIRONMENT": "Development",
-          "WebDatabase": "Server=192.168.1.200:13001;Database=Homelab.Web.Dev;User Id=Connect;Password=Homelab;"
+          "WebDatabase": "Server=192.168.1.200:13001;Database=Homelab.Web.Dev;User Id=Connect;Password=ConnectX;"
         }
       }
     }
