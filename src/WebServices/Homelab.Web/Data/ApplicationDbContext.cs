@@ -8,12 +8,14 @@ namespace Homelab.Web.Data;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<IdentityAdministrationAudit> IdentityAdministrationAudits => Set<IdentityAdministrationAudit>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
         builder.ApplyConfiguration(new UserNotificationEntityTypeConfiguration());
+        builder.ApplyConfiguration(new IdentityAdministrationAuditEntityTypeConfiguration());
     }
 }
 internal class EfContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
@@ -25,7 +27,8 @@ internal class EfContextFactory : IDesignTimeDbContextFactory<ApplicationDbConte
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         string connectionString = args.Length > 0
             ? args[0]
-            : "Host=localhost;Port=5432;Database=Homelab.Web;Username=postgres;Password=postgres";
+            : Environment.GetEnvironmentVariable("ConnectionStrings__WebDatabase")
+                ?? throw new InvalidOperationException("Pass the web database connection string as an EF argument or ConnectionStrings__WebDatabase.");
 
         string applicationConnectionString = $"Application Name={ApplicationName};{connectionString}";
 

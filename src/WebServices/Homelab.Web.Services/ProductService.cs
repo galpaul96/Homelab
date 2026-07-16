@@ -9,8 +9,6 @@ namespace Homelab.Web.Services
 {
     internal class ProductService : IProductService
     {
-        private const string ApiBaseUrl = "http://api:8080";
-
         private readonly ILogger<ProductService> logger;
         private readonly IGatewayClient gatewayClient;
 
@@ -29,7 +27,7 @@ namespace Homelab.Web.Services
             var route = clientId.HasValue
                 ? $"Products?clientId={clientId.Value}"
                 : "Products";
-            var response = await gatewayClient.GetAsync(ApiBaseUrl, route);
+            var response = await gatewayClient.GetAsync(route);
             var products = await ReadResponseAsync<IReadOnlyCollection<ProductResponse>>(
                 response,
                 "products") ?? [];
@@ -41,7 +39,7 @@ namespace Homelab.Web.Services
         {
             logger.LogInformation("Getting product {ProductId}.", id);
 
-            var response = await gatewayClient.GetAsync(ApiBaseUrl, $"Products/{id}");
+            var response = await gatewayClient.GetAsync($"Products/{id}");
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 logger.LogInformation("Product {ProductId} was not found.", id);
@@ -57,7 +55,6 @@ namespace Homelab.Web.Services
             logger.LogInformation("Creating product {ProductName} for client {ClientId}.", product.Name, product.ClientId);
 
             var response = await gatewayClient.PostAsync(
-                ApiBaseUrl,
                 "Products",
                 new CreateProductRequest
                 {
@@ -79,7 +76,6 @@ namespace Homelab.Web.Services
             logger.LogInformation("Updating product {ProductId}.", id);
 
             var response = await gatewayClient.PutAsync(
-                ApiBaseUrl,
                 $"Products/{id}",
                 new UpdateProductRequest
                 {
@@ -103,7 +99,7 @@ namespace Homelab.Web.Services
         {
             logger.LogInformation("Deleting product {ProductId}.", id);
 
-            var response = await gatewayClient.DeleteAsync(ApiBaseUrl, $"Products/{id}");
+            var response = await gatewayClient.DeleteAsync($"Products/{id}");
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 logger.LogInformation("Product {ProductId} was not found for deletion.", id);

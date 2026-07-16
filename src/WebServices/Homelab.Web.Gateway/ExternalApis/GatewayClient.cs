@@ -16,62 +16,38 @@ internal class GatewayClient : IGatewayClient
 
     private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<HttpResponseMessage> GetAsync(string baseUrl, string route)
+    public async Task<HttpResponseMessage> GetAsync(string route, CancellationToken cancellationToken = default)
     {
-        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
-
-        var uri = BuildUri(baseUrl, route);
-        return await httpClient.GetAsync(uri);
+        var httpClient = _httpClientFactory.CreateClient("api");
+        return await httpClient.GetAsync(route, cancellationToken);
     }
 
-    public async Task<HttpResponseMessage> PostAsync(string baseUrl, string route, object? payload = null)
+    public async Task<HttpResponseMessage> PostAsync(string route, object? payload = null, CancellationToken cancellationToken = default)
     {
-        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
-
-        var uri = BuildUri(baseUrl, route);
-        return await httpClient.PostAsync(uri, CreateJsonContent(payload));
+        var httpClient = _httpClientFactory.CreateClient("api");
+        return await httpClient.PostAsync(route, CreateJsonContent(payload), cancellationToken);
     }
 
-    public Task<HttpResponseMessage> PatchAsync(string baseUrl, string route, object? payload = null)
+    public async Task<HttpResponseMessage> PutAsync(string route, object? payload = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("PatchAsync is not implemented yet.");
+        var httpClient = _httpClientFactory.CreateClient("api");
+        return await httpClient.PutAsync(route, CreateJsonContent(payload), cancellationToken);
     }
 
-    public async Task<HttpResponseMessage> PutAsync(string baseUrl, string route, object? payload = null)
+    public async Task<HttpResponseMessage> DeleteAsync(string route, object? payload = null, CancellationToken cancellationToken = default)
     {
-        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
-
-        var uri = BuildUri(baseUrl, route);
-        return await httpClient.PutAsync(uri, CreateJsonContent(payload));
-    }
-
-    public async Task<HttpResponseMessage> DeleteAsync(string baseUrl, string route, object? payload = null)
-    {
-        using var httpClient = _httpClientFactory.CreateClient(nameof(GetAsync));
-
-        var uri = BuildUri(baseUrl, route);
+        var httpClient = _httpClientFactory.CreateClient("api");
         if (payload is null)
         {
-            return await httpClient.DeleteAsync(uri);
+            return await httpClient.DeleteAsync(route, cancellationToken);
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Delete, uri)
+        using var request = new HttpRequestMessage(HttpMethod.Delete, route)
         {
             Content = CreateJsonContent(payload)
         };
 
-        return await httpClient.SendAsync(request);
-    }
-
-    private static Uri BuildUri(string baseUrl, string route)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
-        ArgumentException.ThrowIfNullOrWhiteSpace(route);
-
-        var normalizedBaseUrl = baseUrl.EndsWith('/') ? baseUrl : $"{baseUrl}/";
-        var normalizedRoute = route.StartsWith('/') ? route[1..] : route;
-
-        return new Uri(new Uri(normalizedBaseUrl), normalizedRoute);
+        return await httpClient.SendAsync(request, cancellationToken);
     }
 
     private static StringContent CreateJsonContent(object? payload)

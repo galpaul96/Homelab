@@ -4,23 +4,29 @@ using Homelab.Web.Components.Account;
 using Homelab.Web.Components.Admin;
 using Homelab.Web.Components.User;
 using Homelab.Web.Data;
+using Homelab.Web.IdentityAdministration;
 using Homelab.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
-using System.Diagnostics;
+using System.Security.Claims;
 
 namespace Homelab.Web;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        builder.Services.ConfiugreServices();
+        builder.Services.ConfigureServices(builder.Configuration);
+        builder.Services.AddOptions<IdentityAdministrationOptions>()
+            .Bind(builder.Configuration.GetSection(IdentityAdministrationOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => !options.SeedDefaultAdministrator || options.DefaultAdminPassword.Length >= 12,
+                "DefaultAdminPassword must contain at least 12 characters when administrator seeding is enabled.")
+            .ValidateOnStart();
         // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents(options =>
@@ -40,6 +46,7 @@ public class Program
         builder.Services.AddScoped<IdentityUserAccessor>();
         builder.Services.AddScoped<IdentityRedirectManager>();
         builder.Services.AddScoped<IdentityAdminService>();
+        builder.Services.AddScoped<IIdentityDatabaseInitializer, IdentityDatabaseInitializer>();
         builder.Services.AddScoped<NotificationService>();
         builder.Services.AddSingleton<NotificationUpdateDispatcher>();
         builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
@@ -52,11 +59,8 @@ public class Program
             })
             .AddIdentityCookies();
 
-        //var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-        //builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        //options.UseSqlServer(connectionString));
-
-        var connectionString = Environment.GetEnvironmentVariable("WebDatabase") ?? throw new InvalidOperationException("Connection string 'WebDatabase' not found.");
+        var connectionString = builder.Configuration.GetConnectionString("WebDatabase")
+            ?? throw new InvalidOperationException("Connection string 'WebDatabase' not found.");
 
         static void ConfigureWebDbContext(DbContextOptionsBuilder options, string connectionString)
         {
@@ -68,27 +72,41 @@ public class Program
         builder.Services.AddDbContext<ApplicationDbContext>(
             options => ConfigureWebDbContext(options, connectionString));
 
-        var sw = Stopwatch.StartNew();
-        Console.WriteLine("Deploying database...");
-        var dbContext = new EfContextFactory().CreateDbContext([connectionString]);
-        dbContext.Database.SetCommandTimeout(TimeSpan.FromMinutes(30));
-        dbContext.Database.Migrate();
-        Console.WriteLine($"Deployment done in {sw.Elapsed}");
-
         if (builder.Environment.IsDevelopment())
         {
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
         }
 
-        builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
+        builder.Services.AddIdentityCore<ApplicationUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedAccount = true;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Password.RequiredLength = 12;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+            })
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
         builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+        builder.Services.AddAuthorization(options =>
+            options.AddPolicy(IdentityAdministrationConstants.AdministrationPolicy, policy =>
+                policy.RequireAuthenticatedUser().RequireRole(IdentityAdministrationConstants.AdminRole)));
 
         var app = builder.Build();
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var initializer = scope.ServiceProvider.GetRequiredService<IIdentityDatabaseInitializer>();
+            await initializer.InitializeAsync();
+        }
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())

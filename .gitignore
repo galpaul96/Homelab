@@ -38,3 +38,9 @@ Thumbs.db
 
 /src/ApiServices/ConnectX.Api.Ef/Scripts/SeedMeetingServiceTestData.sql
 /scripts/identity/create-admin-role-for-user.sql
+# Local environment and secret material
+.env
+.env.*
+!.env.example
+secrets/
+**/appsettings.Local.json

@@ -1,4 +1,5 @@
 using Homelab.Web.Gateway.ExternalApis;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -6,15 +7,20 @@ namespace Homelab.Web.Gateway
 {
     public static class Configurations
     {
-        public static void ConfiugreGateway(this IServiceCollection services)
+        public static void ConfigureGateway(this IServiceCollection services, IConfiguration configuration)
         {
             services.TryAddScoped<IGatewayClient, GatewayClient>();
-            //services.AddHttpClient("foo"); // adding an HttpClient named "foo" with a default configuration
 
-            services.AddHttpClient("api", c => c.BaseAddress = new Uri("https://www.example.com")) // configuring HttpClient itself
-                //.AddHttpMessageHandler<MyAuthHandler>() // adding additional delegating handlers to form a message handler chain
-                .ConfigurePrimaryHttpMessageHandler(b => new HttpClientHandler() { AllowAutoRedirect = false }) // configuring primary handler
-                .SetHandlerLifetime(TimeSpan.FromMinutes(30)); // changing the handler recycling interval
+            var baseAddress = configuration.GetSection(ApiClientOptions.SectionName)[nameof(ApiClientOptions.BaseAddress)]
+                ?? throw new InvalidOperationException("Configuration key 'ApiClient:BaseAddress' is required.");
+
+            if (!Uri.TryCreate(baseAddress, UriKind.Absolute, out var apiBaseAddress))
+            {
+                throw new InvalidOperationException("Configuration key 'ApiClient:BaseAddress' must be an absolute URI.");
+            }
+
+            services.AddHttpClient("api", client => client.BaseAddress = apiBaseAddress)
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         }
     }
 }

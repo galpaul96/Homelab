@@ -1,4 +1,5 @@
 using Homelab.Web.Gateway;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -6,9 +7,9 @@ namespace Homelab.Web.Services
 {
     public static class Configurations
     {
-        public static void ConfiugreServices(this IServiceCollection services)
+        public static void ConfigureServices(this IServiceCollection services, IConfiguration configuration)
         {
-            services.ConfiugreGateway();
+            services.ConfigureGateway(configuration);
 
             services.TryAddScoped<IClientService, ClientService>();
             services.TryAddScoped<IProductService, ProductService>();

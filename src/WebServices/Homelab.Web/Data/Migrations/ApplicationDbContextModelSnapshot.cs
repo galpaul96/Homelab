@@ -17,12 +17,69 @@ namespace Homelab.Web.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.27")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Homelab.Domain.Entities.UserNotification", b =>
+            modelBuilder.Entity("Homelab.Domain.Entities.Web.IdentityAdministrationAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActorUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("OccurredUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TargetRoleId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("TargetUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("OccurredUtc");
+
+                    b.HasIndex("ActorUserId", "OccurredUtc");
+
+                    b.HasIndex("TargetUserId", "OccurredUtc");
+
+                    b.ToTable("IdentityAdministrationAudits", (string)null);
+                });
+
+            modelBuilder.Entity("Homelab.Domain.Entities.Web.UserNotification", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -309,7 +366,7 @@ namespace Homelab.Web.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Homelab.Domain.Entities.UserNotification", b =>
+            modelBuilder.Entity("Homelab.Domain.Entities.Web.UserNotification", b =>
                 {
                     b.HasOne("Homelab.Web.Data.ApplicationUser", null)
                         .WithMany()

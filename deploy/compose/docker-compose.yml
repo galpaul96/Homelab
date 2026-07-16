@@ -1,0 +1,129 @@
+services:
+  edge:
+    image: caddy:2.10-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      web:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: src/WebServices/Homelab.Web/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ApiClient__BaseAddress: http://api:8080/
+      ConnectionStrings__WebDatabase: Host=postgres-web;Port=5432;Database=${WEB_DB_NAME:-homelab_web};Username=${WEB_DB_USER:-homelab_web};Password=${WEB_DB_PASSWORD:?WEB_DB_PASSWORD is required}
+      ConnectionStrings__Redis: redis:6379
+    networks: [edge, application]
+    depends_on:
+      api:
+        condition: service_healthy
+      postgres-web:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/alive"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  api:
+    build:
+      context: ../..
+      dockerfile: src/ApiServices/Homelab.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__ApiDatabase: Host=postgres-api;Port=5432;Database=${API_DB_NAME:-homelab_api};Username=${API_DB_USER:-homelab_api};Password=${API_DB_PASSWORD:?API_DB_PASSWORD is required}
+      MongoDb__ConnectionString: mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}@mongo:27017/?authSource=admin
+      MongoDb__DatabaseName: ${MONGO_DB_NAME:-homelab}
+    networks: [application, data]
+    depends_on:
+      postgres-api:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/alive"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    networks: [application]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  postgres-web:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${WEB_DB_NAME:-homelab_web}
+      POSTGRES_USER: ${WEB_DB_USER:-homelab_web}
+      POSTGRES_PASSWORD: ${WEB_DB_PASSWORD:?WEB_DB_PASSWORD is required}
+    volumes: [postgres_web_data:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres-api:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${API_DB_NAME:-homelab_api}
+      POSTGRES_USER: ${API_DB_USER:-homelab_api}
+      POSTGRES_PASSWORD: ${API_DB_PASSWORD:?API_DB_PASSWORD is required}
+    volumes: [postgres_api_data:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongo:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+    volumes: [mongo_data:/data/db]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+networks:
+  edge: {}
+  application:
+    internal: true
+  data:
+    internal: true
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  postgres_web_data: {}
+  postgres_api_data: {}
+  mongo_data: {}
+  redis_data: {}

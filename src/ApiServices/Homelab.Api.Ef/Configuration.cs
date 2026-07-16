@@ -13,7 +13,8 @@ namespace Homelab.Api.Ef
         {
             services.TryAddScoped<IRepository, Repository>();
 
-            var connectionString = Environment.GetEnvironmentVariable("ApiDatabase") ?? throw new InvalidOperationException("Connection string 'WebDatabase' not found.");
+            var connectionString = configuration.GetConnectionString("ApiDatabase")
+                ?? throw new InvalidOperationException("Connection string 'ApiDatabase' not found.");
 
             services.AddDbContext<EfContext>(
             options =>

@@ -4,13 +4,11 @@ namespace Homelab.Web.Gateway.ExternalApis;
 
 public interface IGatewayClient
 {
-    Task<HttpResponseMessage> GetAsync(string baseUrl, string route);
+    Task<HttpResponseMessage> GetAsync(string route, CancellationToken cancellationToken = default);
 
-    Task<HttpResponseMessage> PostAsync(string baseUrl, string route, object? payload = null);
+    Task<HttpResponseMessage> PostAsync(string route, object? payload = null, CancellationToken cancellationToken = default);
 
-    Task<HttpResponseMessage> PatchAsync(string baseUrl, string route, object? payload = null);
+    Task<HttpResponseMessage> PutAsync(string route, object? payload = null, CancellationToken cancellationToken = default);
 
-    Task<HttpResponseMessage> PutAsync(string baseUrl, string route, object? payload = null);
-
-    Task<HttpResponseMessage> DeleteAsync(string baseUrl, string route, object? payload = null);
+    Task<HttpResponseMessage> DeleteAsync(string route, object? payload = null, CancellationToken cancellationToken = default);
 }

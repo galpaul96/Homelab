@@ -1,17 +1,57 @@
 using Homelab.Web.Data;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Homelab.Domain.Entities.Web;
+using Homelab.Web.IdentityAdministration;
 
 namespace Homelab.Web.Components.Admin;
 
 public sealed class IdentityAdminService(
     UserManager<ApplicationUser> userManager,
     RoleManager<IdentityRole> roleManager,
-    ApplicationDbContext dbContext)
+    ApplicationDbContext dbContext,
+    AuthenticationStateProvider authenticationStateProvider)
 {
     private const int MaxPageSize = 50;
 
     private static readonly TimeSpan DisabledLockoutDuration = TimeSpan.FromDays(36500);
+
+    private async Task AuditAsync(string action, string outcome, string? targetUserId = null, string? targetRoleId = null, string? errorCode = null, string? detail = null)
+    {
+        var principal = (await authenticationStateProvider.GetAuthenticationStateAsync()).User;
+        var actorUserId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        dbContext.IdentityAdministrationAudits.Add(new IdentityAdministrationAudit
+        {
+            OccurredUtc = DateTimeOffset.UtcNow,
+            CorrelationId = Guid.NewGuid(),
+            Action = action,
+            Outcome = outcome,
+            ErrorCode = errorCode,
+            ActorUserId = actorUserId,
+            TargetUserId = targetUserId,
+            TargetRoleId = targetRoleId,
+            Detail = detail is null ? null : detail[..Math.Min(detail.Length, 2000)]
+        });
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task<string?> GetActorIdAsync()
+        => (await authenticationStateProvider.GetAuthenticationStateAsync()).User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    private async Task<bool> IsLastActiveAdminAsync(string userId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return !await (
+            from user in dbContext.Users
+            join userRole in dbContext.UserRoles on user.Id equals userRole.UserId
+            join role in dbContext.Roles on userRole.RoleId equals role.Id
+            where role.Name == IdentityAdministrationConstants.AdminRole
+                && (!user.LockoutEnd.HasValue || user.LockoutEnd <= now)
+                && user.Id != userId
+            select user.Id).AnyAsync();
+    }
 
     public async Task<PagedResult<UserCatalogItem>> GetUsersAsync(
         int pageNumber,
@@ -245,6 +285,8 @@ public sealed class IdentityAdminService(
         }
 
         var result = await roleManager.CreateAsync(new IdentityRole(normalizedRoleName));
+        await AuditAsync("role.create", result.Succeeded ? "succeeded" : "failed", targetRoleId: null,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
         return FromIdentityResult(result, $"Role '{normalizedRoleName}' created.");
     }
 
@@ -270,6 +312,8 @@ public sealed class IdentityAdminService(
 
         role.Name = normalizedRoleName;
         var result = await roleManager.UpdateAsync(role);
+        await AuditAsync("role.rename", result.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
         return FromIdentityResult(result, $"Role '{normalizedRoleName}' updated.");
     }
 
@@ -283,6 +327,8 @@ public sealed class IdentityAdminService(
 
         var roleName = role.Name ?? role.Id;
         var result = await roleManager.DeleteAsync(role);
+        await AuditAsync("role.delete", result.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
         return FromIdentityResult(result, $"Role '{roleName}' removed.");
     }
 
@@ -311,6 +357,8 @@ public sealed class IdentityAdminService(
         }
 
         var result = await userManager.AddToRoleAsync(user, normalizedRoleName);
+        await AuditAsync("user.role.assign", result.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
         return FromIdentityResult(result, $"Assigned role '{normalizedRoleName}' to {DisplayUser(user)}.");
     }
 
@@ -327,7 +375,16 @@ public sealed class IdentityAdminService(
             return AdminOperationResult.Success($"{DisplayUser(user)} does not have role '{roleName}'.");
         }
 
+        if (string.Equals(roleName, IdentityAdministrationConstants.AdminRole, StringComparison.OrdinalIgnoreCase)
+            && await IsLastActiveAdminAsync(userId))
+        {
+            await AuditAsync("user.role.remove", "rejected", userId, errorCode: "last_active_admin", detail: "role=Admin");
+            return AdminOperationResult.Failure("The final active administrator cannot lose the Admin role.");
+        }
+
         var result = await userManager.RemoveFromRoleAsync(user, roleName);
+        await AuditAsync("user.role.remove", result.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
         return FromIdentityResult(result, $"Removed role '{roleName}' from {DisplayUser(user)}.");
     }
 
@@ -379,6 +436,8 @@ public sealed class IdentityAdminService(
 
         var lockoutEnd = DateTimeOffset.UtcNow.AddDays(safeDays);
         var result = await userManager.SetLockoutEndDateAsync(user, lockoutEnd);
+        await AuditAsync("user.lock", result.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: $"days={safeDays}");
         return FromIdentityResult(result, $"Locked {DisplayUser(user)} until {lockoutEnd.LocalDateTime:g}.");
     }
 
@@ -390,6 +449,19 @@ public sealed class IdentityAdminService(
             return AdminOperationResult.Failure("User was not found.");
         }
 
+        if (user.Id == await GetActorIdAsync())
+        {
+            await AuditAsync("user.disable", "rejected", user.Id, errorCode: "self_protection");
+            return AdminOperationResult.Failure("You cannot disable your own account.");
+        }
+
+        if (await userManager.IsInRoleAsync(user, IdentityAdministrationConstants.AdminRole)
+            && await IsLastActiveAdminAsync(user.Id))
+        {
+            await AuditAsync("user.disable", "rejected", user.Id, errorCode: "last_active_admin");
+            return AdminOperationResult.Failure("The final active administrator cannot be disabled.");
+        }
+
         var enableLockoutResult = await userManager.SetLockoutEnabledAsync(user, true);
         if (!enableLockoutResult.Succeeded)
         {
@@ -398,6 +470,8 @@ public sealed class IdentityAdminService(
 
         var lockoutEnd = DateTimeOffset.UtcNow.Add(DisabledLockoutDuration);
         var result = await userManager.SetLockoutEndDateAsync(user, lockoutEnd);
+        await AuditAsync("user.disable", result.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: result.Succeeded ? null : "identity_failed");
         return FromIdentityResult(result, $"Disabled {DisplayUser(user)}.");
     }
 
@@ -422,6 +496,8 @@ public sealed class IdentityAdminService(
         }
 
         var resetFailuresResult = await userManager.ResetAccessFailedCountAsync(user);
+        await AuditAsync("user.enable", resetFailuresResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: resetFailuresResult.Succeeded ? null : "identity_failed");
         return FromIdentityResult(resetFailuresResult, $"Enabled {DisplayUser(user)}.");
     }
 
@@ -483,6 +559,18 @@ public sealed class IdentityAdminService(
             ? await userManager.ResetPasswordAsync(user, await userManager.GeneratePasswordResetTokenAsync(user), normalizedPassword)
             : await userManager.AddPasswordAsync(user, normalizedPassword);
 
+        await AuditAsync("user.password.temporary_set", result.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: result.Succeeded ? null : "identity_failed", detail: "password=redacted");
+        if (result.Succeeded)
+        {
+            var claims = await userManager.GetClaimsAsync(user);
+            if (!claims.Any(claim => claim.Type == IdentityAdministrationConstants.MustChangePasswordClaimType))
+            {
+                await userManager.AddClaimAsync(user, new Claim(
+                    IdentityAdministrationConstants.MustChangePasswordClaimType,
+                    IdentityAdministrationConstants.MustChangePasswordClaimValue));
+            }
+        }
         return FromIdentityResult(result, $"Set a temporary password for {DisplayUser(user)}.");
     }
 
@@ -564,6 +652,7 @@ public sealed class IdentityAdminService(
         });
 
         await dbContext.SaveChangesAsync();
+        await AuditAsync("user.claim.add", "succeeded", user.Id, detail: $"claim_type={type};value=redacted");
         return AdminOperationResult.Success($"Assigned claim '{type}' to {DisplayUser(user)}.");
     }
 
@@ -577,6 +666,7 @@ public sealed class IdentityAdminService(
 
         dbContext.UserClaims.Remove(claim);
         await dbContext.SaveChangesAsync();
+        await AuditAsync("user.claim.remove", "succeeded", claim.UserId, detail: "claim_value=redacted");
         return AdminOperationResult.Success("User claim removed.");
     }
 

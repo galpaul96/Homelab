@@ -36,7 +36,8 @@ namespace Homelab.Api.Ef
             }
             else
             {
-                connectionString = "Host=localhost;Port=5432;Database=Homelab.Api;Username=postgres;Password=postgres";
+                connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__ApiDatabase")
+                    ?? throw new InvalidOperationException("Pass the API database connection string as an EF argument or ConnectionStrings__ApiDatabase.");
             }
             string applicationConnectionString = $"Application Name={ApplicationName};{connectionString}";
 

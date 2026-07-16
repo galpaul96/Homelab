@@ -28,6 +28,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homelab.Api.Services", "Api
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homelab.Api.Ef", "ApiServices\Homelab.Api.Ef\Homelab.Api.Ef.csproj", "{749FF461-F6D9-41B7-947A-72A7027DEB9B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homelab.Api.MongoDb", "ApiServices\Homelab.Api.MongoDb\Homelab.Api.MongoDb.csproj", "{E31F7403-3734-431C-A09D-FB6579CFEC95}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -74,6 +76,10 @@ Global
 		{749FF461-F6D9-41B7-947A-72A7027DEB9B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{749FF461-F6D9-41B7-947A-72A7027DEB9B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{749FF461-F6D9-41B7-947A-72A7027DEB9B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E31F7403-3734-431C-A09D-FB6579CFEC95}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E31F7403-3734-431C-A09D-FB6579CFEC95}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E31F7403-3734-431C-A09D-FB6579CFEC95}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E31F7403-3734-431C-A09D-FB6579CFEC95}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -87,6 +93,7 @@ Global
 		{AA183B58-1337-E59C-E52B-27A75435FB11} = {71EF1939-D64B-4AF5-8D2B-A3CFCF5653C1}
 		{1CCAA2A8-999D-CEA9-E712-0941BDBD980D} = {71EF1939-D64B-4AF5-8D2B-A3CFCF5653C1}
 		{749FF461-F6D9-41B7-947A-72A7027DEB9B} = {71EF1939-D64B-4AF5-8D2B-A3CFCF5653C1}
+		{E31F7403-3734-431C-A09D-FB6579CFEC95} = {71EF1939-D64B-4AF5-8D2B-A3CFCF5653C1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F957AFAD-418C-4F5B-B134-D3096B8CED95}

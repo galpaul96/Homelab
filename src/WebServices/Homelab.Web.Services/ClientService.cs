@@ -9,8 +9,6 @@ namespace Homelab.Web.Services
 {
     internal class ClientService : IClientService
     {
-        private const string ApiBaseUrl = "http://api:8080";
-
         private readonly ILogger<ClientService> logger;
         private readonly IGatewayClient gatewayClient;
 
@@ -26,7 +24,7 @@ namespace Homelab.Web.Services
         {
             logger.LogInformation("Getting clients.");
 
-            var response = await gatewayClient.GetAsync(ApiBaseUrl, "Licensing/clients");
+            var response = await gatewayClient.GetAsync("Licensing/clients");
             var clients = await ReadResponseAsync<IReadOnlyCollection<ClientResponse>>(
                 response,
                 "clients") ?? [];
@@ -38,7 +36,7 @@ namespace Homelab.Web.Services
         {
             logger.LogInformation("Getting client {ClientId}.", id);
 
-            var response = await gatewayClient.GetAsync(ApiBaseUrl, $"Licensing/clients/{id}");
+            var response = await gatewayClient.GetAsync($"Licensing/clients/{id}");
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
@@ -55,7 +53,6 @@ namespace Homelab.Web.Services
             logger.LogInformation("Creating client {ClientName}.", client.Name);
 
             var response = await gatewayClient.PostAsync(
-                ApiBaseUrl,
                 "Licensing/clients",
                 new CreateClientRequest
                 {
@@ -75,7 +72,6 @@ namespace Homelab.Web.Services
             logger.LogInformation("Updating client {ClientId}.", id);
 
             var response = await gatewayClient.PutAsync(
-                ApiBaseUrl,
                 $"Licensing/clients/{id}",
                 new UpdateClientRequest
                 {
@@ -97,7 +93,7 @@ namespace Homelab.Web.Services
         {
             logger.LogInformation("Deleting client {ClientId}.", id);
 
-            var response = await gatewayClient.DeleteAsync(ApiBaseUrl, $"Licensing/clients/{id}");
+            var response = await gatewayClient.DeleteAsync($"Licensing/clients/{id}");
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 logger.LogInformation("Client {ClientId} was not found for deletion.", id);

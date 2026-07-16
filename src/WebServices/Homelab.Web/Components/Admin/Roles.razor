@@ -1,8 +1,9 @@
 @page "/admin/roles"
 @rendermode InteractiveServer
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Policy = IdentityAdministrationConstants.AdministrationPolicy)]
 @using Microsoft.AspNetCore.Authorization
 @using Homelab.Web.Components.Admin
+@using Homelab.Web.IdentityAdministration
 @inject IdentityAdminService IdentityAdmin
 
 <PageTitle>Admin roles</PageTitle>
