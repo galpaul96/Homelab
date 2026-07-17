@@ -74,6 +74,35 @@
     padding-bottom: 0.5rem;
 }
 
+.nav-item ::deep .nav-link {
+    border-radius: var(--hl-radius-sm);
+    color: var(--hl-text-muted);
+    font-weight: 550;
+    margin-inline: .65rem;
+    padding-inline: .85rem;
+    width: calc(100% - 1.3rem);
+    transition: background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.nav-item ::deep .nav-link:hover {
+    background: rgba(167, 183, 201, .09);
+    color: var(--hl-text);
+    transform: translateX(2px);
+}
+
+.nav-item ::deep a.active {
+    background: linear-gradient(90deg, rgba(226, 189, 114, .2), rgba(226, 189, 114, .07));
+    box-shadow: inset 3px 0 0 var(--hl-accent);
+    color: var(--hl-text);
+}
+
+.nav-item ::deep form { margin-inline: .65rem; }
+.nav-item ::deep form .nav-link { margin-inline: 0; width: 100%; text-align: left; }
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-item ::deep .nav-link { transition: none; }
+}
+
     .nav-item:first-of-type {
         padding-top: 1rem;
     }
