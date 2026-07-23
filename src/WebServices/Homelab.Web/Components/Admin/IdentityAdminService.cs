@@ -40,6 +40,42 @@ public sealed class IdentityAdminService(
     private async Task<string?> GetActorIdAsync()
         => (await authenticationStateProvider.GetAuthenticationStateAsync()).User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+    private async Task<AdminOperationResult> RefreshSecurityStampsAsync(
+        IEnumerable<string> userIds,
+        AdminOperationResult operationResult)
+    {
+        if (!operationResult.Succeeded)
+        {
+            return operationResult;
+        }
+
+        foreach (var userId in userIds.Distinct(StringComparer.Ordinal))
+        {
+            var user = await userManager.FindByIdAsync(userId);
+            if (user is null)
+            {
+                continue;
+            }
+
+            var stampResult = await userManager.UpdateSecurityStampAsync(user);
+            if (!stampResult.Succeeded)
+            {
+                return FromIdentityResult(stampResult, string.Empty);
+            }
+        }
+
+        return operationResult;
+    }
+
+    private async Task<List<string>> GetRoleMemberIdsAsync(string roleId)
+    {
+        return await dbContext.UserRoles
+            .AsNoTracking()
+            .Where(userRole => userRole.RoleId == roleId)
+            .Select(userRole => userRole.UserId)
+            .ToListAsync();
+    }
+
     private async Task<bool> IsLastActiveAdminAsync(string userId)
     {
         var now = DateTimeOffset.UtcNow;
@@ -310,11 +346,15 @@ public sealed class IdentityAdminService(
             return AdminOperationResult.Failure($"Role '{normalizedRoleName}' already exists.");
         }
 
+        var roleMemberIds = await GetRoleMemberIdsAsync(role.Id);
         role.Name = normalizedRoleName;
         var result = await roleManager.UpdateAsync(role);
-        await AuditAsync("role.rename", result.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
-            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
-        return FromIdentityResult(result, $"Role '{normalizedRoleName}' updated.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            roleMemberIds,
+            FromIdentityResult(result, $"Role '{normalizedRoleName}' updated."));
+        await AuditAsync("role.rename", operationResult.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> DeleteRoleAsync(string roleId)
@@ -326,10 +366,14 @@ public sealed class IdentityAdminService(
         }
 
         var roleName = role.Name ?? role.Id;
+        var roleMemberIds = await GetRoleMemberIdsAsync(role.Id);
         var result = await roleManager.DeleteAsync(role);
-        await AuditAsync("role.delete", result.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
-            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
-        return FromIdentityResult(result, $"Role '{roleName}' removed.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            roleMemberIds,
+            FromIdentityResult(result, $"Role '{roleName}' removed."));
+        await AuditAsync("role.delete", operationResult.Succeeded ? "succeeded" : "failed", targetRoleId: role.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> AssignRoleToUserAsync(string userId, string? roleName)
@@ -357,9 +401,12 @@ public sealed class IdentityAdminService(
         }
 
         var result = await userManager.AddToRoleAsync(user, normalizedRoleName);
-        await AuditAsync("user.role.assign", result.Succeeded ? "succeeded" : "failed", user.Id,
-            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
-        return FromIdentityResult(result, $"Assigned role '{normalizedRoleName}' to {DisplayUser(user)}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            FromIdentityResult(result, $"Assigned role '{normalizedRoleName}' to {DisplayUser(user)}."));
+        await AuditAsync("user.role.assign", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"role={normalizedRoleName}");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> RemoveRoleFromUserAsync(string userId, string roleName)
@@ -383,9 +430,12 @@ public sealed class IdentityAdminService(
         }
 
         var result = await userManager.RemoveFromRoleAsync(user, roleName);
-        await AuditAsync("user.role.remove", result.Succeeded ? "succeeded" : "failed", user.Id,
-            errorCode: result.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
-        return FromIdentityResult(result, $"Removed role '{roleName}' from {DisplayUser(user)}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            FromIdentityResult(result, $"Removed role '{roleName}' from {DisplayUser(user)}."));
+        await AuditAsync("user.role.remove", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"role={roleName}");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> UpdateUserProfileAsync(
@@ -436,9 +486,12 @@ public sealed class IdentityAdminService(
 
         var lockoutEnd = DateTimeOffset.UtcNow.AddDays(safeDays);
         var result = await userManager.SetLockoutEndDateAsync(user, lockoutEnd);
-        await AuditAsync("user.lock", result.Succeeded ? "succeeded" : "failed", user.Id,
-            errorCode: result.Succeeded ? null : "identity_failed", detail: $"days={safeDays}");
-        return FromIdentityResult(result, $"Locked {DisplayUser(user)} until {lockoutEnd.LocalDateTime:g}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            FromIdentityResult(result, $"Locked {DisplayUser(user)} until {lockoutEnd.LocalDateTime:g}."));
+        await AuditAsync("user.lock", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"days={safeDays}");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> DisableUserAsync(string userId)
@@ -470,9 +523,12 @@ public sealed class IdentityAdminService(
 
         var lockoutEnd = DateTimeOffset.UtcNow.Add(DisabledLockoutDuration);
         var result = await userManager.SetLockoutEndDateAsync(user, lockoutEnd);
-        await AuditAsync("user.disable", result.Succeeded ? "succeeded" : "failed", user.Id,
-            errorCode: result.Succeeded ? null : "identity_failed");
-        return FromIdentityResult(result, $"Disabled {DisplayUser(user)}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            FromIdentityResult(result, $"Disabled {DisplayUser(user)}."));
+        await AuditAsync("user.disable", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> EnableUserAsync(string userId)
@@ -496,9 +552,12 @@ public sealed class IdentityAdminService(
         }
 
         var resetFailuresResult = await userManager.ResetAccessFailedCountAsync(user);
-        await AuditAsync("user.enable", resetFailuresResult.Succeeded ? "succeeded" : "failed", user.Id,
-            errorCode: resetFailuresResult.Succeeded ? null : "identity_failed");
-        return FromIdentityResult(resetFailuresResult, $"Enabled {DisplayUser(user)}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            FromIdentityResult(resetFailuresResult, $"Enabled {DisplayUser(user)}."));
+        await AuditAsync("user.enable", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> SetUserLockoutEnabledAsync(string userId, bool enabled)
@@ -524,9 +583,11 @@ public sealed class IdentityAdminService(
             }
         }
 
-        return AdminOperationResult.Success(enabled
-            ? $"Enabled lockout protection for {DisplayUser(user)}."
-            : $"Disabled lockout protection for {DisplayUser(user)}.");
+        return await RefreshSecurityStampsAsync(
+            [user.Id],
+            AdminOperationResult.Success(enabled
+                ? $"Enabled lockout protection for {DisplayUser(user)}."
+                : $"Disabled lockout protection for {DisplayUser(user)}."));
     }
 
     public async Task<AdminOperationResult> ResetUserAccessFailuresAsync(string userId)
@@ -652,8 +713,12 @@ public sealed class IdentityAdminService(
         });
 
         await dbContext.SaveChangesAsync();
-        await AuditAsync("user.claim.add", "succeeded", user.Id, detail: $"claim_type={type};value=redacted");
-        return AdminOperationResult.Success($"Assigned claim '{type}' to {DisplayUser(user)}.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [user.Id],
+            AdminOperationResult.Success($"Assigned claim '{type}' to {DisplayUser(user)}."));
+        await AuditAsync("user.claim.add", operationResult.Succeeded ? "succeeded" : "failed", user.Id,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: $"claim_type={type};value=redacted");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> RemoveUserClaimAsync(int claimId)
@@ -666,8 +731,12 @@ public sealed class IdentityAdminService(
 
         dbContext.UserClaims.Remove(claim);
         await dbContext.SaveChangesAsync();
-        await AuditAsync("user.claim.remove", "succeeded", claim.UserId, detail: "claim_value=redacted");
-        return AdminOperationResult.Success("User claim removed.");
+        var operationResult = await RefreshSecurityStampsAsync(
+            [claim.UserId],
+            AdminOperationResult.Success("User claim removed."));
+        await AuditAsync("user.claim.remove", operationResult.Succeeded ? "succeeded" : "failed", claim.UserId,
+            errorCode: operationResult.Succeeded ? null : "identity_failed", detail: "claim_value=redacted");
+        return operationResult;
     }
 
     public async Task<AdminOperationResult> CreateClaimAsync(
@@ -719,6 +788,7 @@ public sealed class IdentityAdminService(
         }
 
         var value = NormalizeClaimValue(claimValue);
+        var roleMemberIds = await GetRoleMemberIdsAsync(role.Id);
         var exists = await dbContext.RoleClaims.AnyAsync(claim =>
             claim.RoleId == role.Id &&
             claim.ClaimType == type &&
@@ -737,7 +807,9 @@ public sealed class IdentityAdminService(
         });
 
         await dbContext.SaveChangesAsync();
-        return AdminOperationResult.Success($"Assigned claim '{type}' to role '{role.Name ?? role.Id}'.");
+        return await RefreshSecurityStampsAsync(
+            roleMemberIds,
+            AdminOperationResult.Success($"Assigned claim '{type}' to role '{role.Name ?? role.Id}'."));
     }
 
     private async Task<AdminOperationResult> UpdateUserClaimAsync(int claimId, string? claimType, string? claimValue)
@@ -769,7 +841,9 @@ public sealed class IdentityAdminService(
         claim.ClaimType = type;
         claim.ClaimValue = value;
         await dbContext.SaveChangesAsync();
-        return AdminOperationResult.Success("User claim updated.");
+        return await RefreshSecurityStampsAsync(
+            [claim.UserId],
+            AdminOperationResult.Success("User claim updated."));
     }
 
     private async Task<AdminOperationResult> UpdateRoleClaimAsync(int claimId, string? claimType, string? claimValue)
@@ -787,6 +861,7 @@ public sealed class IdentityAdminService(
         }
 
         var value = NormalizeClaimValue(claimValue);
+        var roleMemberIds = await GetRoleMemberIdsAsync(claim.RoleId);
         var duplicateExists = await dbContext.RoleClaims.AnyAsync(otherClaim =>
             otherClaim.Id != claim.Id &&
             otherClaim.RoleId == claim.RoleId &&
@@ -801,7 +876,9 @@ public sealed class IdentityAdminService(
         claim.ClaimType = type;
         claim.ClaimValue = value;
         await dbContext.SaveChangesAsync();
-        return AdminOperationResult.Success("Role claim updated.");
+        return await RefreshSecurityStampsAsync(
+            roleMemberIds,
+            AdminOperationResult.Success("Role claim updated."));
     }
 
     private async Task<AdminOperationResult> RemoveRoleClaimAsync(int claimId)
@@ -812,9 +889,12 @@ public sealed class IdentityAdminService(
             return AdminOperationResult.Failure("Role claim was not found.");
         }
 
+        var roleMemberIds = await GetRoleMemberIdsAsync(claim.RoleId);
         dbContext.RoleClaims.Remove(claim);
         await dbContext.SaveChangesAsync();
-        return AdminOperationResult.Success("Role claim removed.");
+        return await RefreshSecurityStampsAsync(
+            roleMemberIds,
+            AdminOperationResult.Success("Role claim removed."));
     }
 
     private static string? NormalizeRequired(string? value, string fieldName)
